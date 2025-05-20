@@ -1,0 +1,41 @@
+import socket
+import ssl
+import threading
+
+HOST = '192.168.0.70'
+PORT = 65431
+
+# Setup TLS context for server
+context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+context.load_cert_chain(certfile='cert.pem', keyfile='key.pem')
+
+def handle_client(connstream, addr):
+    print(f"[+] Connection from {addr}")
+    try:
+        while True:
+            data = connstream.recv(1024)
+            if not data:
+                print(f"[-] Connection closed by {addr}")
+                break
+            print(f"Client [{addr}]: {data.decode()}")
+            # Optional: echo or send response
+            # connstream.sendall(b"Received your message.")
+    except Exception as e:
+        print(f"[!] Error with {addr}: {e}")
+    finally:
+        connstream.close()
+
+with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+    sock.bind((HOST, PORT))
+    sock.listen(5)
+    print(f"🔐 TLS Server listening on {PORT} at {HOST}...")
+    while True:
+        try:
+            conn, addr = sock.accept()
+            connstream = context.wrap_socket(conn, server_side=True)
+            threading.Thread(target=handle_client, args=(connstream, addr), daemon=True).start()
+        except ssl.SSLError as e:
+            print(f"[SSL ERROR] {e}")
+            conn.close()
+        except Exception as e:
+            print(f"[ERROR] {e}")
