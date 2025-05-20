@@ -1,0 +1,43 @@
+import socket
+import ssl
+import threading
+import RPi.GPIO as GPIO
+import time
+
+SERVER_IP = '192.168.0.70'
+PORT = 65431
+TRIGGER_PIN = 17
+
+# Setup GPIO for trigger
+GPIO.setmode(GPIO.BCM)
+GPIO.setup(TRIGGER_PIN, GPIO.OUT)
+GPIO.output(TRIGGER_PIN, GPIO.LOW)  # Default low
+
+context = ssl.create_default_context()
+context.check_hostname = False
+context.verify_mode = ssl.CERT_NONE  # For self-signed certs
+
+def handle_receive(sock):
+    while True:
+        try:
+            data = sock.recv(1024)
+            if not data:
+                break
+            print(f"Server: {data.decode()}")
+        except:
+            break
+
+try:
+    with socket.create_connection((SERVER_IP, PORT)) as sock:
+        with context.wrap_socket(sock, server_hostname=SERVER_IP) as ssock:
+            print(f"🔐 Connected securely to {SERVER_IP}:{PORT}")
+            threading.Thread(target=handle_receive, args=(ssock,), daemon=True).start()
+            while True:
+                msg = input("You: ")
+                GPIO.output(TRIGGER_PIN, GPIO.HIGH)  # 🔴 Trigger ON just before TLS encryption
+                ssock.sendall(msg.encode())          # 🔐 TLS encryption happens here
+                GPIO.output(TRIGGER_PIN, GPIO.LOW)   # 🔵 Trigger OFF after encryption
+except Exception as e:
+    print(f"An error occurred: {e}")
+finally:
+    GPIO.cleanup()
